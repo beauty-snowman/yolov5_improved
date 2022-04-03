@@ -1,1 +1,8 @@
+class DepthwiseSeparableConv(nn.Module):
+    def __init__(self, c1, c2, k=3, s=1):
+        super(DepthwiseSeparableConv, self).__init__()
+        self.cv1 = Conv(c1, c1, k, s, g=c1)
+        self.cv2 = Conv(c1, c2, 1, 1)
 
+    def forward(self, x):
+        return self.cv2(self.cv1(x))
