@@ -1,1 +1,17 @@
+class SE(nn.Module):
+    def __init__(self, c1, c2, reduction=16):
+        super().__init__()
+        c_ = c1 // reduction
+        self.cv = nn.Sequential(
+            nn.Conv2d(c1, c_, kernel_size=1, stride=1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(c_, c2, kernel_size=1, stride=1, bias=False),
+            nn.Sigmoid()
+        )
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
 
+    def forward(self, x):
+        b, c, _, _ = x.shape
+        out = self.avg_pool(x)
+        out = self.cv(out)
+        return x * out  
