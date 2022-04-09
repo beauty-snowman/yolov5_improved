@@ -1,1 +1,47 @@
+class ChannelAttn(nn.Module):
+    def __init__(self, c1, c2, reduction=16):
+        super().__init__()
+        self.maxpool = nn.AdaptiveMaxPool2d(1)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.attn = nn.Sequential(
+            nn.Conv2d(c1, c1 // reduction, 1, bias=False),
+            nn.ReLU(),
+            nn.Conv2d(c1 // reduction, c2, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
 
+    def forward(self, x):
+        max_result = self.maxpool(x)
+        avg_result = self.avgpool(x)
+        max_out = self.attn(max_result)
+        avg_out = self.attn(avg_result)
+        output = self.sigmoid(max_out + avg_out)
+        return output
+
+
+class SpatialAttn(nn.Module):
+    def __init__(self, kernel_size=7):
+        super().__init__()
+        self.conv = Conv(2, 1, k=kernel_size, act=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        max_result, _ = torch.max(x, dim=1, keepdim=True)
+        avg_result = torch.mean(x, dim=1, keepdim=True)
+        result = torch.cat([max_result, avg_result], 1)
+        output = self.conv(result)
+        output = self.sigmoid(output)
+        return output
+
+
+class CBAM(nn.Module):
+    def __init__(self, c1, c2, reduction=16):
+        super().__init__()
+        self.ca = ChannelAttn(c1=c1, c2=c2, reduction=reduction)
+        self.sa = SpatialAttn()
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        out = x * self.ca(x)
+        out = out * self.sa(out)
+        return out
