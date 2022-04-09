@@ -1,1 +1,42 @@
+class TransformerLayer(nn.Module):  
+    def __init__(self, c, num_heads, norm=False, mlp_ratio=1, droppath_ratio=0., act=False):
+        super().__init__()
+        self.q = nn.Linear(c, c, bias=False)
+        self.k = nn.Linear(c, c, bias=False)
+        self.v = nn.Linear(c, c, bias=False)
+        self.ma = nn.MultiheadAttention(embed_dim=c, num_heads=num_heads)
+        self.droppath = DropPath(droppath_ratio)
+        self.fc1 = nn.Linear(c, c * mlp_ratio, bias=False)
+        self.fc2 = nn.Linear(c * mlp_ratio, c, bias=False)
+        self.act = nn.GELU() if act else nn.Identity()
+        self.norm = nn.LayerNorm() if norm else nn.Identity()
 
+    def forward(self, x):
+        x = x + self.droppath(self.ma(self.q(x), self.k(x), self.v(x))[0])
+        x = x + self.droppath(self.fc2(self.act(self.fc1(self.norm(x)))))
+        return x
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, c1, c2, num_heads, num_layers):
+        super().__init__()
+        self.conv = None
+        if c1 != c2:
+            self.conv = Conv(c1, c2)
+        self.linear = nn.Linear(c2, c2)
+        self.tr = nn.Sequential(*[TransformerLayer(c2, num_heads) for _ in range(num_layers)])
+        self.c2 = c2
+
+    def forward(self, x):
+        if self.conv is not None:
+            x = self.conv(x)
+        b, _, w, h = x.shape
+        p = x.flatten(2).unsqueeze(0).transpose(0, 3).squeeze(3)
+        return self.tr(p + self.linear(p)).unsqueeze(3).transpose(0, 3).reshape(b, self.c2, w, h)
+
+class C3ViT(C3):
+    # C3 module with TransformerBlock()
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        self.m = nn.Sequential(TransformerBlock(c_, c_, 4, n))
