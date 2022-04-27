@@ -1,24 +1,32 @@
-class TransformerLayer(nn.Module):  
-    def __init__(self, c, num_heads, norm=False, mlp_ratio=1, droppath_ratio=0., act=False):
-        super().__init__()
-        self.q = nn.Linear(c, c, bias=False)
-        self.k = nn.Linear(c, c, bias=False)
-        self.v = nn.Linear(c, c, bias=False)
-        self.ma = nn.MultiheadAttention(embed_dim=c, num_heads=num_heads)
-        self.droppath = DropPath(droppath_ratio)
-        self.fc1 = nn.Linear(c, c * mlp_ratio, bias=False)
-        self.fc2 = nn.Linear(c * mlp_ratio, c, bias=False)
+class MLP(nn.Module):
+    def __init__(self, c1, mlp_ratio=1, act=False):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(c1, c1 * mlp_ratio, bias=False)
+        self.fc2 = nn.Linear(c1 * mlp_ratio, c1, bias=False)
         self.act = nn.GELU() if act else nn.Identity()
+
+    def forward(self, x):
+        return self.fc2(self.act(self.fc1(x)))
+
+class TransformerLayer(nn.Module):
+    def __init__(self, c1, num_heads, norm=False, droppath_ratio=0.):
+        super().__init__()
+        self.q = nn.Linear(c1, c1, bias=False)
+        self.k = nn.Linear(c1, c1, bias=False)
+        self.v = nn.Linear(c1, c1, bias=False)
+        self.ma = nn.MultiheadAttention(embed_dim=c1, num_heads=num_heads)
+        self.droppath = DropPath(droppath_ratio)
         self.norm = nn.LayerNorm() if norm else nn.Identity()
+        self.mlp = MLP(c1)
 
     def forward(self, x):
         x = x + self.droppath(self.ma(self.q(x), self.k(x), self.v(x))[0])
-        x = x + self.droppath(self.fc2(self.act(self.fc1(self.norm(x)))))
+        x = x + self.droppath(self.mlp(self.norm(x)))
         return x
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, c1, c2, num_heads, num_layers):
+    def __init__(self, c1, c2, num_heads=4, num_layers=1):
         super().__init__()
         self.conv = None
         if c1 != c2:
