@@ -1,0 +1,15 @@
+# for yolov4-tiny
+class CSPResBlock(nn.Module):
+
+    def __init__(self, c1, c2, k=3, s=1):
+        super(CSPResBlock, self).__init__()
+        c_ = int(c2 // 2)
+        self.cv1 = Conv(c1 // 2, c_, k, s)
+        self.cv2 = Conv(c_, c_, k, s)
+        self.cv3 = Conv(c2, c2, 1, 1)
+
+    def forward(self, x):
+        _, chunk2 = x.chunk(2, dim=1)
+        x1 = self.cv1(chunk2)
+        x2 = self.cv2(x1)
+        return self.cv3(torch.cat((x1, x2), dim=1))
